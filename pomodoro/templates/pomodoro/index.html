@@ -1,0 +1,325 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pomodoro Timer 🍅</title>
+
+    <!-- Fonte moderna -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link href="{% static 'css/dist/styles.css' %}" rel="stylesheet" />
+
+    <style>
+      :root { --text:#212124; --bg:#E5DED4; }
+
+      html,body{height:100%}
+      body {
+        font-family: "Poppins", sans-serif;
+        overflow: hidden;
+        position: relative;
+        background-color: var(--bg);
+        color: var(--text);
+      }
+
+      /* Texto motivacional - não bloqueia cliques */
+      .motivation {
+        position: absolute;
+        top: 50px;
+        font-size: 2.8rem;
+        font-weight: 700;
+        color: var(--text);
+        text-align: center;
+        width: 100%;
+        z-index: 5;
+        pointer-events: none;
+      }
+
+      /* Centralização */
+      .center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        text-align: center;
+        gap: 3rem;
+        z-index: 10;
+        position: relative;
+      }
+
+      /* Gojo no fundo (sempre atrás) */
+      .gojo-bg {
+        position: absolute;
+        bottom: 0;
+        right: 40px;
+        width: 850px;
+        z-index: 0;
+        pointer-events: none;
+        user-select: none;
+        transform: translate(50px, 50px);
+      }
+
+      /* Círculo do timer */
+      .progress-ring{ position: relative; width:230px; height:230px; }
+      .progress-ring circle{ fill:none; stroke-width:10; transform:rotate(-90deg); transform-origin:50% 50%; transition:stroke-dashoffset .3s linear; }
+      .ring-bg{ stroke:#444; }
+      .ring-progress{ stroke:#f87171; }
+
+      /* Timer text color */
+      #timer { color: #1F1F1F; }
+
+      /* Botões estilosos */
+      .btn-custom { padding:1rem 3rem; font-size:1.25rem; border-radius:1rem; font-weight:600; transition:all .25s ease; color:white; border:none; cursor:pointer; }
+      .btn-start { background: linear-gradient(90deg,#dc2626,#ef4444); box-shadow:0 4px 15px rgba(239,68,68,.35); }
+      .btn-start:hover{ transform:scale(1.05); box-shadow:0 6px 20px rgba(239,68,68,.55); }
+      .btn-reset { background: linear-gradient(90deg,#2563eb,#3b82f6); box-shadow:0 4px 15px rgba(37,99,235,.35); }
+      .btn-reset:hover{ transform:scale(1.05); box-shadow:0 6px 20px rgba(37,99,235,.55); }
+
+      .fade-in { animation: fadeIn 1.2s ease forwards; }
+      @keyframes fadeIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+      /* ===========================
+         MENU TEMPOS - Estilos robustos
+         =========================== */
+
+      /* wrapper que fica no canto; usa inline-block para limitar dimensão do containing block */
+      #timesWrapper {
+        position: absolute;
+        top: 16px; /* top-5 */
+        right: 16px; /* right-5 */
+        z-index: 999999;
+        display: inline-block;
+      }
+
+      /* inner para alinhar o menu relativo ao botão */
+      #timesInner { position: relative; display:inline-block; }
+
+      /* botão */
+      #timesBtn {
+        padding: 10px 16px;
+        border-radius: 12px;
+        background: white;
+        cursor: pointer;
+        text-align: center;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.12);
+        font-weight: 600;
+        color: var(--text);
+        border: none;
+      }
+      #timesBtn:hover { transform: translateY(-1px); transition: .12s; }
+
+      /* menu absoluto alinhado ao botão (embaixo dele) */
+      #timesMenu {
+        position: absolute;
+        top: calc(100% + 8px); /* abaixo do botão */
+        right: 0;               /* alinhado à direita do botão */
+        background: white;
+        padding: 12px;
+        width: 230px;
+        max-width: min(90vw,230px);
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        z-index: 1000000;
+        display: none; /* controlado via .show */
+        color: var(--text);
+      }
+
+      #timesMenu.show { display: block; }
+
+      #timesMenu strong { display:block; margin:6px 0; font-weight:600; }
+
+      #timesMenu button {
+        display:block;
+        padding:8px 10px;
+        width:100%;
+        text-align:left;
+        border-radius:8px;
+        background:transparent;
+        border: none;
+        cursor:pointer;
+        color:var(--text);
+        font-size:0.95rem;
+      }
+
+      #timesMenu button:hover { background:#f4f4f4; }
+
+      /* garante que nada do menu seja afetado por pointer-events=none do topo */
+      #timesWrapper { pointer-events:auto; }
+
+    </style>
+  </head>
+
+  <body>
+
+    <!-- MENU TEMPOS - Canto superior direito -->
+    <div id="timesWrapper">
+      <div id="timesInner">
+        <button id="timesBtn" aria-haspopup="true" aria-expanded="false">Tempos ⏱️</button>
+
+        <div id="timesMenu" role="menu" aria-labelledby="timesBtn" class="">
+          <strong>Foco</strong>
+          <button class="menu-item" data-min="5" type="button">5 minutos</button>
+          <button class="menu-item" data-min="10" type="button">10 minutos</button>
+          <button class="menu-item" data-min="25" type="button">25 minutos (padrão)</button>
+          <button class="menu-item" data-min="30" type="button">30 minutos</button>
+          <button class="menu-item" data-min="60" type="button">1 hora</button>
+
+          <strong style="margin-top:8px;">Descanso</strong>
+          <button class="menu-item-break" data-min="2" type="button">2 minutos</button>
+          <button class="menu-item-break" data-min="5" type="button">5 minutos (padrão)</button>
+          <button class="menu-item-break" data-min="10" type="button">10 minutos</button>
+          <button class="menu-item-break" data-min="25" type="button">25 minutos</button>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="motivation fade-in">You Can do it!</h2>
+
+    <div class="center fade-in">
+      <h1 class="text-5xl font-bold text-primary mb-4">Pomodoro Timer 🍅</h1>
+
+      <div class="progress-ring">
+        <svg width="230" height="230" aria-hidden="true">
+          <circle class="ring-bg" cx="115" cy="115" r="100"></circle>
+          <circle class="ring-progress" cx="115" cy="115" r="100" stroke-dasharray="628" stroke-dashoffset="0"></circle>
+        </svg>
+
+        <div id="timer" class="absolute inset-0 flex items-center justify-center text-6xl font-mono font-bold">
+          25:00
+        </div>
+      </div>
+
+      <div class="flex gap-6 justify-center" style="margin-top:18px;">
+        <button id="startPause" class="btn-custom btn-start">Iniciar</button>
+        <button id="reset" class="btn-custom btn-reset">Reiniciar</button>
+      </div>
+
+      <p class="text-lg italic fade-in" style="margin-top:18px; color:var(--text)">
+        Foco total. Descanso depois. 🚀
+      </p>
+    </div>
+
+    <img src="{% static 'pomodoro/gojo-removebg-preview.png' %}" alt="Satoru Gojo" class="gojo-bg" />
+
+    <script>
+      // ---------------- timer ----------------
+      let totalSeconds = 25 * 60;
+      let remainingSeconds = totalSeconds;
+      let interval = null;
+      let isPaused = false;
+
+      const timerDisplay = document.getElementById("timer");
+      const startPauseBtn = document.getElementById("startPause");
+      const resetBtn = document.getElementById("reset");
+      const progressCircle = document.querySelector(".ring-progress");
+      const circumference = 2 * Math.PI * 100;
+
+      function updateDisplay() {
+        const mins = Math.floor(remainingSeconds / 60);
+        const secs = remainingSeconds % 60;
+        timerDisplay.textContent = `${String(mins).padStart(2,"0")}:${String(secs).padStart(2,"0")}`;
+        const progress = remainingSeconds / totalSeconds;
+        const offset = circumference * (1 - progress);
+        progressCircle.style.strokeDashoffset = offset;
+      }
+
+      function countdown() {
+        if (!isPaused && remainingSeconds > 0) {
+          remainingSeconds--;
+          updateDisplay();
+          if (remainingSeconds === 0) {
+            clearInterval(interval);
+            interval = null;
+            playAlarm();
+            startPauseBtn.textContent = "Iniciar";
+          }
+        }
+      }
+
+      function playAlarm(){ new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_21ef6b0bbd.mp3").play(); }
+
+      startPauseBtn.addEventListener("click", () => {
+        if (interval === null) {
+          interval = setInterval(countdown, 1000);
+          startPauseBtn.textContent = "Pausar";
+          isPaused = false;
+        } else if (isPaused) {
+          isPaused = false;
+          startPauseBtn.textContent = "Pausar";
+        } else {
+          isPaused = true;
+          startPauseBtn.textContent = "Retomar";
+        }
+      });
+
+      resetBtn.addEventListener("click", () => {
+        clearInterval(interval);
+        interval = null;
+        isPaused = false;
+        remainingSeconds = totalSeconds;
+        startPauseBtn.textContent = "Iniciar";
+        updateDisplay();
+      });
+
+      updateDisplay();
+
+      // ---------------- tempos personalizados ----------------
+      let focusTime = 25 * 60;
+      let breakTime = 5 * 60;
+
+      function setTime(minutes) {
+        clearInterval(interval); interval = null; isPaused = false;
+        focusTime = minutes * 60;
+        totalSeconds = focusTime;
+        remainingSeconds = totalSeconds;
+        startPauseBtn.textContent = "Iniciar";
+        updateDisplay();
+      }
+
+      function setBreak(minutes) {
+        clearInterval(interval); interval = null; isPaused = false;
+        breakTime = minutes * 60;
+        totalSeconds = breakTime;
+        remainingSeconds = breakTime;
+        startPauseBtn.textContent = "Iniciar";
+        updateDisplay();
+      }
+
+      // ---------------- dropdown funcional ----------------
+      const timesBtn = document.getElementById("timesBtn");
+      const timesMenu = document.getElementById("timesMenu");
+
+      timesBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = timesMenu.classList.toggle("show");
+        timesBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+
+      // fecha clicando fora
+      document.addEventListener("click", (e) => {
+        if (!timesMenu.contains(e.target) && e.target !== timesBtn) {
+          timesMenu.classList.remove("show");
+          timesBtn.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      // bindings de itens (foco)
+      document.querySelectorAll(".menu-item").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const m = parseInt(btn.dataset.min, 10);
+          setTime(m);
+          timesMenu.classList.remove("show");
+        });
+      });
+
+      // bindings de itens (descanso)
+      document.querySelectorAll(".menu-item-break").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const m = parseInt(btn.dataset.min, 10);
+          setBreak(m);
+          timesMenu.classList.remove("show");
+        });
+      });
+    </script>
+  </body>
+</html>
